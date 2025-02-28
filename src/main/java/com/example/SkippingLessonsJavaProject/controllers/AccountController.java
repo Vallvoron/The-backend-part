@@ -1,21 +1,17 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
 import com.example.SkippingLessonsJavaProject.UserRepository;
-import com.example.SkippingLessonsJavaProject.models.User;
-import com.example.SkippingLessonsJavaProject.models.UserRegisterRequest;
-import com.example.SkippingLessonsJavaProject.models.UserRole;
-import com.example.SkippingLessonsJavaProject.models.UserSingInRequest;
+import com.example.SkippingLessonsJavaProject.models.*;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.RequestEntity;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 import java.util.Map;
@@ -34,8 +30,10 @@ public class AccountController {
 
     private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
     private final UserRepository userDb;
-    public AccountController(UserRepository userRepository){
+    private final TokenBlackList tokenBlackList;
+    public AccountController(UserRepository userRepository, TokenBlackList tokenBlackList){
         this.userDb = userRepository;
+        this.tokenBlackList = tokenBlackList;
     }
 
     @PostMapping("/register")
@@ -97,6 +95,72 @@ public class AccountController {
             return ResponseEntity.ok(response);
 
         } catch (Exception error) {
+            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+        }
+    }
+
+
+
+    @GetMapping("/profile")
+    @Operation(summary = "Профиль пользователя")
+    @SecurityRequirement(name = "Bearer Authentication")
+    public ResponseEntity<?> profile(HttpServletRequest request) {
+        try {
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+            }
+
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+
+            String login = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(login);
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).body("Пользователь не найден");
+            }
+
+            User user = userLogin.get();
+            UserProfileResponse response = new UserProfileResponse(
+                    user.getName(),
+                    user.getLogin(),
+                    user.getPhone(),
+                    user.getRole()
+            );
+
+            return ResponseEntity.ok(response);
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+        }
+    }
+
+
+    @PostMapping("/logout")
+    @Operation(summary = "Выход из системы")
+    @SecurityRequirement(name = "Bearer Authentication")
+    public ResponseEntity<?> logout (HttpServletRequest request){
+        try{
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")){
+                return ResponseEntity.badRequest().body("Токен не найден или вы еще не зарегистрированы");
+            }
+
+            String token = authHeader.substring(7);
+            tokenBlackList.addToken(token);
+
+            return ResponseEntity.ok("Вы успешно вышли из системы");
+        }catch (Exception error) {
             return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
         }
     }
