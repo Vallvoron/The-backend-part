@@ -1,6 +1,7 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
 import com.example.SkippingLessonsJavaProject.UserRepository;
+import com.example.SkippingLessonsJavaProject.configs.SecretKeyGenerator;
 import com.example.SkippingLessonsJavaProject.models.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +23,8 @@ import io.jsonwebtoken.security.Keys;
 import java.security.Key;
 import jakarta.validation.Valid;
 
+import javax.crypto.SecretKey;
+
 
 @RestController
 @RequestMapping("/api/account")
@@ -28,7 +32,9 @@ import jakarta.validation.Valid;
 @Validated
 public class AccountController {
 
-    private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    @Autowired
+    private SecretKey key;
+
     private final UserRepository userDb;
     private final TokenBlackList tokenBlackList;
     public AccountController(UserRepository userRepository, TokenBlackList tokenBlackList){

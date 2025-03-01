@@ -1,0 +1,66 @@
+package com.example.SkippingLessonsJavaProject.models;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(name = "skipping_requests")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class SkippingRequest {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @ManyToOne
+    @JoinColumn(name = "student_id", nullable = false)
+    private User student;
+
+    @Column(nullable = false)
+    private LocalDate startDate;
+
+    @Column(nullable = false)
+    private LocalDate endDate;
+
+    private String reason;
+
+    @Enumerated(EnumType.STRING)
+    private SkippingRequestStatus status = SkippingRequestStatus.PENDING;
+
+    @OneToMany(mappedBy = "skippingRequest", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Confirmation> confirmations = new ArrayList<>();
+
+    @ManyToOne
+    @JoinColumn(name = "approver_id")
+    private User approver;
+
+    private String rejectionReason;
+
+    public void extendEndDate(LocalDate newEndDate) {
+        if (newEndDate.isAfter(this.endDate)) {
+            this.endDate = newEndDate;
+        } else {
+            throw new IllegalArgumentException("Новая дата окончания должна быть позже текущей.");
+        }
+    }
+
+    public void addConfirmation(Confirmation confirmation) {
+        this.confirmations.add(confirmation);
+        confirmation.setSkippingRequest(this);
+    }
+
+    public void removeConfirmation(Confirmation confirmation) {
+        this.confirmations.remove(confirmation);
+        confirmation.setSkippingRequest(null);
+    }
+}
