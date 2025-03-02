@@ -1,11 +1,10 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
-import com.example.SkippingLessonsJavaProject.UserRepository;
-import com.example.SkippingLessonsJavaProject.configs.SecretKeyGenerator;
+import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import com.example.SkippingLessonsJavaProject.models.*;
+import com.example.SkippingLessonsJavaProject.repositories.UsersForRegisterRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,13 +13,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Optional;
-import io.jsonwebtoken.security.Keys;
-import java.security.Key;
+import java.util.*;
+
+
 import jakarta.validation.Valid;
 
 import javax.crypto.SecretKey;
@@ -35,45 +32,156 @@ public class AccountController {
     @Autowired
     private SecretKey key;
 
+    private final UsersForRegisterRepository usersForRegisterDb;
     private final UserRepository userDb;
     private final TokenBlackList tokenBlackList;
-    public AccountController(UserRepository userRepository, TokenBlackList tokenBlackList){
+    public AccountController(UsersForRegisterRepository usersForRegisterDb, UserRepository userRepository, TokenBlackList tokenBlackList){
         this.userDb = userRepository;
         this.tokenBlackList = tokenBlackList;
+        this.usersForRegisterDb = usersForRegisterDb;
     }
 
     @PostMapping("/register")
     @Operation(summary = "Регистрация пользователя")
     public ResponseEntity<?> register(@Valid @RequestBody UserRegisterRequest request){
         try {
-            Optional<User> existingUser = userDb.findByLogin(request.getLogin());
-            if (existingUser.isPresent()){
+            if (userDb.findByLogin(request.getLogin()).isPresent()){
                 return ResponseEntity.badRequest().body("Пользователь с таким email уже существует");
             }
 
-            User newUser = new User();
+            if (usersForRegisterDb.findByLogin(request.getLogin()).isPresent()){
+                return ResponseEntity.badRequest().body("Заявка с таким email уже отправлена");
+            }
+
+            UsersForRegister newUser = new UsersForRegister();
             newUser.setLogin(request.getLogin());
             newUser.setPassword(request.getPassword());
             newUser.setName(request.getName());
             newUser.setPhone(request.getPhone());
             newUser.setRole(request.getRole() != null ? request.getRole() : UserRole.ПОЛЬЗОВАТЕЛЬ);
 
-            userDb.save(newUser);
+            usersForRegisterDb.save(newUser);
 
-            String token = generateToken(newUser);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("token", token);
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok("Заявка успешно отправлена, ожидайте одобрение администратора");
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
         }
 
-
-
     }
+
+
+    @PostMapping("/approve")
+    @Operation(summary = "Одобрение заявок регистрации пользователей")
+    @Transactional
+    public ResponseEntity<?> approveUser(HttpServletRequest request, @RequestParam String login, @RequestParam UserRole role) {
+        try {
+
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).body("Пользователь не найден");
+            }
+
+            User user = userLogin.get();
+
+            if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
+                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+            }
+
+            Optional<UsersForRegister> optionalUser = usersForRegisterDb.findByLogin(login);
+            if (optionalUser.isEmpty()) {
+                return ResponseEntity.status(404).body("Заявка на регистрацию не найдена");
+            }
+
+            UsersForRegister usersForRegister = optionalUser.get();
+
+            if (userDb.findByLogin(login).isPresent()) {
+                return ResponseEntity.badRequest().body("Пользователь уже зарегистрирован");
+            }
+
+            User newUser = new User();
+            newUser.setLogin(usersForRegister.getLogin());
+            newUser.setPassword(usersForRegister.getPassword());
+            newUser.setName(usersForRegister.getName());
+            newUser.setPhone(usersForRegister.getPhone());
+
+            newUser.setRole(role);
+
+            userDb.save(newUser);
+
+            usersForRegisterDb.delete(usersForRegister);
+
+            return ResponseEntity.ok("Пользователь " + login + " добавлен в систему");
+
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+        }
+    }
+
+
+    @GetMapping("/registerList")
+    @Operation(summary = "Список заявок на регистрацию")
+    public ResponseEntity<?> registerList (HttpServletRequest request){
+        try {
+
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).body("Пользователь не найден");
+            }
+
+            User user = userLogin.get();
+
+            if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
+                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+            }
+
+            List<UsersForRegister> users = usersForRegisterDb.findAll();
+
+            return ResponseEntity.ok(users);
+
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+        }
+    }
+
 
 
     @PostMapping("/login")

@@ -1,11 +1,9 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
-import com.example.SkippingLessonsJavaProject.UserRepository;
+import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import com.example.SkippingLessonsJavaProject.models.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,7 +15,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.crypto.SecretKey;
-import java.security.Key;
 import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +63,12 @@ public class UserController {
             Optional<User> userLogin = userDb.findByLogin(login);
             if (userLogin.isEmpty()) {
                 return ResponseEntity.status(404).body("Пользователь не найден");
+            }
+
+            User ouruser = userLogin.get();
+
+            if (!Objects.equals(ouruser.getRole().toString(), "АДМИН")) {
+                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
             }
 
             List<User> userList = userDb.findAll();
@@ -124,7 +127,7 @@ public class UserController {
     @PutMapping("/changeRole")
     @Operation(summary = "Изменение роли пользователя")
     @SecurityRequirement(name = "Bearer Authentication")
-    public ResponseEntity<?> changeRole (HttpServletRequest authRequest,@Valid @RequestBody UserChangeRoleRequest request) {
+    public ResponseEntity<?> changeRole (HttpServletRequest authRequest,@RequestParam String firstLogin, @RequestParam UserRole firstRole) {
         try {
             String authHeader = authRequest.getHeader("Authorization");
 
@@ -154,17 +157,16 @@ public class UserController {
             User user = userLogin.get();
             String role = user.getRole().toString();
 
-            if(Objects.equals(role, "АДМИН")||Objects.equals(role, "ДЕКАНАТ"))
+            if(Objects.equals(role, "АДМИН"))
             {
-                userLogin = userDb.findByLogin(request.getLogin());
+                userLogin = userDb.findByLogin(firstLogin);
                 User changedUser = userLogin.get();
-                changedUser.setRole(request.getNewRole());
+                changedUser.setRole(firstRole);
                 userDb.save(changedUser);
-                return  ResponseEntity.ok("Роль пользователя успешно изменена.");
+                return  ResponseEntity.ok("Роль пользователя успешно изменена");
             }
-            else  return ResponseEntity.badRequest().body("Запрос отклонен: недостаточные права");
+            else  return ResponseEntity.badRequest().body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
         } catch (Exception error) {
-            logger.error("Error occurred while changing role: ", error);
             return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
         }
     }
