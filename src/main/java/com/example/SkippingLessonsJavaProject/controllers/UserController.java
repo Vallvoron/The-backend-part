@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -43,13 +44,13 @@ public class UserController {
             String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
 
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -62,13 +63,13 @@ public class UserController {
             String login = claims.getSubject();
             Optional<User> userLogin = userDb.findByLogin(login);
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
             }
 
             User ouruser = userLogin.get();
 
             if (!Objects.equals(ouruser.getRole().toString(), "АДМИН")) {
-                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН"));
             }
 
             List<User> userList = userDb.findAll();
@@ -76,10 +77,10 @@ public class UserController {
             Map<String, List<User>> response = new HashMap<>();
             response.put("users array", userList);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(response);
 
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -91,13 +92,13 @@ public class UserController {
             String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
 
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -110,7 +111,7 @@ public class UserController {
             String login = claims.getSubject();
             Optional<User> userLogin = userDb.findByLogin(login);
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
             }
 
             User user = userLogin.get();
@@ -120,7 +121,7 @@ public class UserController {
 
             return ResponseEntity.ok(response);
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -132,13 +133,13 @@ public class UserController {
             String authHeader = authRequest.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
 
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -151,7 +152,7 @@ public class UserController {
             String login = claims.getSubject();
             Optional<User> userLogin = userDb.findByLogin(login);
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
             }
 
             User user = userLogin.get();
@@ -163,11 +164,11 @@ public class UserController {
                 User changedUser = userLogin.get();
                 changedUser.setRole(firstRole);
                 userDb.save(changedUser);
-                return  ResponseEntity.ok("Роль пользователя успешно изменена");
+                return  ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Роль пользователя успешно изменена"));
             }
-            else  return ResponseEntity.badRequest().body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+            else  return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН"));
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 }

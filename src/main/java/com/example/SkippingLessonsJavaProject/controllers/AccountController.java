@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -46,11 +47,11 @@ public class AccountController {
     public ResponseEntity<?> register(@Valid @RequestBody UserRegisterRequest request){
         try {
             if (userDb.findByLogin(request.getLogin()).isPresent()){
-                return ResponseEntity.badRequest().body("Пользователь с таким email уже существует");
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь с таким email уже существует"));
             }
 
             if (usersForRegisterDb.findByLogin(request.getLogin()).isPresent()){
-                return ResponseEntity.badRequest().body("Заявка с таким email уже отправлена");
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Заявка с таким email уже отправлена"));
             }
 
             UsersForRegister newUser = new UsersForRegister();
@@ -62,10 +63,11 @@ public class AccountController {
 
             usersForRegisterDb.save(newUser);
 
-            return ResponseEntity.ok("Заявка успешно отправлена, ожидайте одобрение администратора");
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("message", "Заявка успешно отправлена, ожидайте одобрение администратора"));
 
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
 
     }
@@ -80,12 +82,12 @@ public class AccountController {
             String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -98,24 +100,24 @@ public class AccountController {
             Optional<User> userLogin = userDb.findByLogin(ourlogin);
 
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
             }
 
             User user = userLogin.get();
 
             if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
-                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН"));
             }
 
             Optional<UsersForRegister> optionalUser = usersForRegisterDb.findByLogin(login);
             if (optionalUser.isEmpty()) {
-                return ResponseEntity.status(404).body("Заявка на регистрацию не найдена");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Заявка на регистрацию не надена"));
             }
 
             UsersForRegister usersForRegister = optionalUser.get();
 
             if (userDb.findByLogin(login).isPresent()) {
-                return ResponseEntity.badRequest().body("Пользователь уже зарегистрирован");
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь уже зарегистрирован"));
             }
 
             User newUser = new User();
@@ -130,10 +132,10 @@ public class AccountController {
 
             usersForRegisterDb.delete(usersForRegister);
 
-            return ResponseEntity.ok("Пользователь " + login + " добавлен в систему");
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь " + login + " добавлен в систему"));
 
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -146,12 +148,12 @@ public class AccountController {
             String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -164,21 +166,21 @@ public class AccountController {
             Optional<User> userLogin = userDb.findByLogin(ourlogin);
 
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
             }
 
             User user = userLogin.get();
 
             if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
-                return ResponseEntity.status(403).body("Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН");
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН"));
             }
 
             List<UsersForRegister> users = usersForRegisterDb.findAll();
 
-            return ResponseEntity.ok(users);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("users", users));
 
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -192,13 +194,13 @@ public class AccountController {
             Optional<User> dataUser = userDb.findByLogin(request.getLogin());
 
             if (dataUser.isEmpty()){
-                return ResponseEntity.status(401).body("Неверный email или password");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Неверный email или password"));
             }
 
             User user = dataUser.get();
 
             if (!user.getPassword().equals(request.getPassword())){
-                return ResponseEntity.status(401).body("Неверный password");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Неверный password"));
             }
 
             String token = generateToken(user);
@@ -206,10 +208,10 @@ public class AccountController {
             Map<String, String> response = new HashMap<>();
             response.put("token", token);
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(response);
 
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -223,13 +225,13 @@ public class AccountController {
             String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.status(400).body("Вы не зарегистрированы");
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
             }
 
             String token = authHeader.substring(7);
 
             if (tokenBlackList.isTokenBlackList(token)) {
-                return ResponseEntity.status(401).body("Вы вышли из системы, повторите вход");
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
             }
 
             Claims claims = Jwts.parser()
@@ -242,7 +244,7 @@ public class AccountController {
             String login = claims.getSubject();
             Optional<User> userLogin = userDb.findByLogin(login);
             if (userLogin.isEmpty()) {
-                return ResponseEntity.status(404).body("Пользователь не найден");
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
             }
 
             User user = userLogin.get();
@@ -253,9 +255,9 @@ public class AccountController {
                     user.getRole()
             );
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(response);
         } catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
@@ -267,15 +269,15 @@ public class AccountController {
         try{
             String authHeader = request.getHeader("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")){
-                return ResponseEntity.badRequest().body("Токен не найден или вы еще не зарегистрированы");
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Токен не найден или вы еще не зарегистрированы"));
             }
 
             String token = authHeader.substring(7);
             tokenBlackList.addToken(token);
 
-            return ResponseEntity.ok("Вы успешно вышли из системы");
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы успешно вышли из системы"));
         }catch (Exception error) {
-            return ResponseEntity.internalServerError().body("Ошибка: " + error.getMessage());
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
 
