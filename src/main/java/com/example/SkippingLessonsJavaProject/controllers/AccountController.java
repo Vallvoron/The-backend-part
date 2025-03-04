@@ -4,6 +4,7 @@ import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import com.example.SkippingLessonsJavaProject.models.*;
 import com.example.SkippingLessonsJavaProject.repositories.UsersForRegisterRepository;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -281,6 +282,18 @@ public class AccountController {
         }
     }
 
+    @PostMapping("/checkToken")
+    @Operation(summary = "Проверка токена пользователя")
+    public ResponseEntity<?> checkToken(String token) {
+        try {
+            Jwts.parser().setSigningKey(key).build().parseClaimsJws(token);
+            return ResponseEntity.ok().body("");
+        } catch (ExpiredJwtException e) {
+            return ResponseEntity.status(401).body("");
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
 
     private String generateToken(User user){
         return Jwts.builder()
