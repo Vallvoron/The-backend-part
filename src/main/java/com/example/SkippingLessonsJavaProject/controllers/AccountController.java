@@ -282,7 +282,7 @@ public class AccountController {
         }
     }
 
-    @PostMapping("/checkToken")
+    @GetMapping("/checkToken")
     @Operation(summary = "Проверка токена пользователя")
     public ResponseEntity<?> checkToken(String token) {
         try {
