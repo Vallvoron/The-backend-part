@@ -5,6 +5,11 @@ import com.example.SkippingLessonsJavaProject.models.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,6 +44,36 @@ public class UserController {
 
     @GetMapping("/list")
     @Operation(summary = "Запрос на выдачу списка пользователей")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Список пользователей получен",
+                    content = @Content(schema = @Schema(implementation = User.class))),
+            @ApiResponse(responseCode = "400", description = "Неверный запрос (пользователь уже существует, и т.д.)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "No Login", value = "{\n  \"message\": \"Вы не зарегистрированы\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "401", description = "Неверный запрос (вышли из аккаунта)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "Logged Out", value = "{\n  \"message\": \"Вы вышли из системы, повторите вход\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "403", description = "Отсутствие прав",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "Not Admin", value = "{\n  \"message\": \"Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "404", description = "Объект не найден",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "User Not Found", value = "{\n  \"message\": \"Пользователь не найден\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = @ExampleObject(
+                                    name = "Internal Server Error",
+                                    value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}"
+                            )))
+    })
     public ResponseEntity<?> list (HttpServletRequest request){
         try {
             String authHeader = request.getHeader("Authorization");
@@ -86,6 +121,31 @@ public class UserController {
 
     @GetMapping("/role")
     @Operation(summary = "Запрос на получение роли пользователя")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Роль пользователя получена",
+                    content = @Content(schema = @Schema(implementation = UserRoleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Неверный запрос (пользователь уже существует, и т.д.)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "No Login", value = "{\n  \"message\": \"Вы не зарегистрированы\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "401", description = "Неверный запрос (вышли из аккаунта)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "Logged Out", value = "{\n  \"message\": \"Вы вышли из системы, повторите вход\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "404", description = "Объект не найден",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "User Not Found", value = "{\n  \"message\": \"Пользователь не найден\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = @ExampleObject(
+                                    name = "Internal Server Error",
+                                    value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}"
+                            )))
+    })
     @SecurityRequirement(name = "Bearer Authentication")
     public ResponseEntity<?> role (HttpServletRequest request) {
         try {
@@ -127,6 +187,40 @@ public class UserController {
 
     @PutMapping("/changeRole")
     @Operation(summary = "Изменение роли пользователя")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Роль пользователя успешно изменена",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = @ExampleObject(
+                                    name = "Success",
+                                    value = "{\n  \"message\": \"Роль пользователя успешно изменена\"\n}"
+                            ))),
+            @ApiResponse(responseCode = "400", description = "Неверный запрос (пользователь уже существует, и т.д.)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "No Login", value = "{\n  \"message\": \"Вы не зарегистрированы\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "401", description = "Неверный запрос (вышли из аккаунта)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "Logged Out", value = "{\n  \"message\": \"Вы вышли из системы, повторите вход\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "403", description = "Отсутствие прав",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "Not Admin", value = "{\n  \"message\": \"Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "404", description = "Объект не найден",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "User Not Found", value = "{\n  \"message\": \"Пользователь не найден\"\n}"),
+                            })),
+            @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = @ExampleObject(
+                                    name = "Internal Server Error",
+                                    value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}"
+                            )))
+    })
     @SecurityRequirement(name = "Bearer Authentication")
     public ResponseEntity<?> changeRole (HttpServletRequest authRequest,@RequestParam String firstLogin, @RequestParam UserRole firstRole) {
         try {
