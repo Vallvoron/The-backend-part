@@ -49,21 +49,4 @@ public class SkippingRequest {
 
     private String rejectionReason;
 
-    public void extendEndDate(LocalDate newEndDate) {
-        if (newEndDate.isAfter(this.endDate)) {
-            this.endDate = newEndDate;
-        } else {
-            throw new IllegalArgumentException("Новая дата окончания должна быть позже текущей.");
-        }
-    }
-
-    public void addConfirmation(Confirmation confirmation) {
-        this.confirmations.add(confirmation);
-        confirmation.setSkippingRequest(this);
-    }
-
-    public void removeConfirmation(Confirmation confirmation) {
-        this.confirmations.remove(confirmation);
-        confirmation.setSkippingRequest(null);
-    }
 }
