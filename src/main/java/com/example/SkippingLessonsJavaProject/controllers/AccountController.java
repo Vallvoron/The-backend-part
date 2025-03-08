@@ -1,5 +1,6 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
+import com.example.SkippingLessonsJavaProject.entitys.User;
 import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import com.example.SkippingLessonsJavaProject.models.*;
 import com.example.SkippingLessonsJavaProject.repositories.UsersForRegisterRepository;

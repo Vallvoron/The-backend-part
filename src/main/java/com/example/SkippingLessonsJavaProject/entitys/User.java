@@ -1,5 +1,6 @@
-package com.example.SkippingLessonsJavaProject.models;
+package com.example.SkippingLessonsJavaProject.entitys;
 
+import com.example.SkippingLessonsJavaProject.models.UserRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;

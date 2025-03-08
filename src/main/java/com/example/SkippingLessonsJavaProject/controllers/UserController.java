@@ -1,5 +1,6 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
+import com.example.SkippingLessonsJavaProject.entitys.User;
 import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import com.example.SkippingLessonsJavaProject.models.*;
 import io.jsonwebtoken.Claims;
@@ -13,7 +14,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;

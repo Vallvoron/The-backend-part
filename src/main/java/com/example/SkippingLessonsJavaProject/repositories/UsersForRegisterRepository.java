@@ -1,6 +1,5 @@
 package com.example.SkippingLessonsJavaProject.repositories;
 
-import com.example.SkippingLessonsJavaProject.models.User;
 import com.example.SkippingLessonsJavaProject.models.UsersForRegister;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
