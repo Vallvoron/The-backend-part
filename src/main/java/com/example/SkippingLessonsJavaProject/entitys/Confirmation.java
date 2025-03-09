@@ -29,7 +29,7 @@ public class Confirmation {
 
     @Lob
     @Column(nullable = false)
-    private File data;
+    private String filePath;
 
     @ManyToOne
     @JoinColumn(name = "skipping_request_id", nullable = false)

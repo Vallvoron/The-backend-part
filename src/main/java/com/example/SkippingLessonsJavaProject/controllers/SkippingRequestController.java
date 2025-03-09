@@ -1,8 +1,10 @@
 package com.example.SkippingLessonsJavaProject.controllers;
 
+import com.example.SkippingLessonsJavaProject.entitys.Confirmation;
 import com.example.SkippingLessonsJavaProject.entitys.SkippingRequest;
 import com.example.SkippingLessonsJavaProject.entitys.User;
 import com.example.SkippingLessonsJavaProject.models.*;
+import com.example.SkippingLessonsJavaProject.repositories.ConfirmationRepository;
 import com.example.SkippingLessonsJavaProject.repositories.SkippingRequestRepository;
 import com.example.SkippingLessonsJavaProject.repositories.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -15,11 +17,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.crypto.SecretKey;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 @RestController
@@ -30,12 +38,16 @@ public class SkippingRequestController {
     private SecretKey key;
 
     private final SkippingRequestRepository skippingRequestRepository;
+    private final ConfirmationRepository confirmationRepository;
     private final UserRepository userDb;
     private final TokenBlackList tokenBlackList;
+    @Value("${file.upload.directory:/data/files/}")
+    private String uploadDirectory;
 
     @Autowired
-    public SkippingRequestController(SkippingRequestRepository skippingRequestRepository, UserRepository userRepository, TokenBlackList tokenBlackList) {
+    public SkippingRequestController(SkippingRequestRepository skippingRequestRepository, ConfirmationRepository confirmationRepository, UserRepository userRepository, TokenBlackList tokenBlackList) {
         this.skippingRequestRepository = skippingRequestRepository;
+        this.confirmationRepository = confirmationRepository;
         this.userDb = userRepository;
         this.tokenBlackList = tokenBlackList;
     }
@@ -259,5 +271,137 @@ public class SkippingRequestController {
         }
     }
 
+    @PostMapping(value = "/addDocument", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Добавление документов к пропуску",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = SkippingRequestRegisterRequest.class))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @Valid @RequestPart("request") ConfirmationRegisterRequest request, @RequestPart("files") List<MultipartFile> files) {
 
+        try {
+
+            String authHeader = authRequest.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
+            }
+
+            User user = userLogin.get();
+
+            if (!Objects.equals(user.getRole().toString(), "СТУДЕНТ")) {
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, пропуска могут создавать только пользователи с ролью СТУДЕНТ"));
+            }
+
+            for (MultipartFile file : files) {
+                String filename = file.getOriginalFilename();
+                String filePath = uploadDirectory + "/" + UUID.randomUUID() + "_" + filename;
+
+                Path path = Paths.get(filePath);
+                Files.write(path, file.getBytes());
+                Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(request.getRequestId());
+                SkippingRequest skippingRequest = skippingRequestOpt.get();
+
+                Confirmation confirmation = new Confirmation();
+                confirmation.setFilename(filename);
+                confirmation.setFileType(file.getContentType());
+                confirmation.setFilePath(filePath);
+                confirmation.setSkippingRequest(skippingRequest);
+                confirmationRepository.save(confirmation);
+            }
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("message", "Документ(-ы) успешно прикреплен(-ы)"));
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
+
+    @GetMapping("/getDocument")
+    @Operation(
+            summary = "Получение листа документов",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = SkippingRequestRegisterRequest.class))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> getConfirmationList(HttpServletRequest request,  @RequestParam UUID skippingRequestId) {
+
+        try {
+
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
+            }
+
+            User user = userLogin.get();
+
+            Optional<SkippingRequest> skippingRequest= skippingRequestRepository.findById(skippingRequestId);
+            SkippingRequest pass= skippingRequest.get();
+            List<Confirmation> confirmations= confirmationRepository.findBySkippingRequest(pass);
+            List<File> files = new ArrayList<>();
+
+            for (Confirmation confirmation : confirmations) {
+                String filePath = confirmation.getFilePath();
+                File file = new File(filePath);
+                if (file.exists()) {
+                    files.add(file);
+                } else {
+                    return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Файл не найден"));
+                }
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(files);
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
 }
