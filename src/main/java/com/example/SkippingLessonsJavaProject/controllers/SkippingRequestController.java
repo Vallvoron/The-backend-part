@@ -28,7 +28,9 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/skipping-requests")
@@ -132,7 +134,6 @@ public class SkippingRequestController {
     @GetMapping("/skippingRequestList")
     @Operation(
             summary = "Список пропусков",
-            description = "Доступно только для админов",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = SkippingRequest.class))),
@@ -143,7 +144,13 @@ public class SkippingRequestController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> skippingRequestList (HttpServletRequest request){
+    public ResponseEntity<?> skippingRequestList (
+            HttpServletRequest request,
+            @RequestParam(required = false) UUID studentId,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(required = false) SortSettings sortSetting,
+            @RequestParam(required = false) Integer lessonNumber){
         try {
 
             String authHeader = request.getHeader("Authorization");
@@ -199,6 +206,39 @@ public class SkippingRequestController {
                     return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав"));
             }
 
+            if (studentId != null){
+                finalList = finalList.stream()
+                        .filter(stud -> stud.getStudent().getId().equals(studentId))
+                        .collect(Collectors.toList());
+            }
+
+            if (startDate != null) {
+                finalList = finalList.stream()
+                        .filter(time -> time.getStartDate() != null && !time.getStartDate().isBefore(startDate))
+                        .collect(Collectors.toList());
+            }
+
+            if (endDate != null) {
+                finalList = finalList.stream()
+                        .filter(time -> time.getEndDate() != null && !time.getEndDate().isAfter(endDate))
+                        .collect(Collectors.toList());
+            }
+
+
+            if (lessonNumber != null){
+                finalList = finalList.stream()
+                        .filter(num -> num.getLessons() != null && num.getLessons().contains(lessonNumber))
+                        .collect(Collectors.toList());
+            }
+
+            if (sortSetting != null){
+                if (sortSetting == SortSettings.ASC){
+                    finalList.sort(Comparator.comparing(SkippingRequest::getStartDate));
+                } else {
+                    finalList.sort(Comparator.comparing(SkippingRequest::getStartDate).reversed());
+                }
+            }
+
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("list", finalList));
 
         } catch (Exception error) {
@@ -209,7 +249,7 @@ public class SkippingRequestController {
 
     @PutMapping("/changeStatus")
     @Operation(
-            summary = "Список пропусков",
+            summary = "Смена статуса у пропуска",
             description = "Доступно только для админов и деканата",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Статус пропуска успешно обновлён\"\n}"))),
@@ -262,6 +302,11 @@ public class SkippingRequestController {
             SkippingRequest skippingRequest = skippingRequestOpt.get();
 
             skippingRequest.setStatus(newStatus);
+
+            if (newStatus == SkippingRequestStatus.APPROVED) {
+                skippingRequest.setApprover(user);
+            }
+
             skippingRequestRepository.save(skippingRequest);
 
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("newStatus", newStatus));
@@ -270,6 +315,10 @@ public class SkippingRequestController {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
+
+
+
+
 
     @PostMapping(value = "/addDocument", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -404,4 +453,82 @@ public class SkippingRequestController {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
     }
+
+
+
+    @PutMapping("/changeDate")
+    @Operation(
+            summary = "Редактирование даты пропуска",
+            description = "Доступно только для студента",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Даты пропуска успешно обновлены\"\n}"))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> changeDate (HttpServletRequest request, @RequestParam UUID skippingRequestId, @RequestParam LocalDate newStartDate, @RequestParam(required = false) LocalDate newEndDate){
+        try{
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
+            }
+
+            User user = userLogin.get();
+
+            Optional<SkippingRequest> skippingRequest = skippingRequestRepository.findById(skippingRequestId);
+            if (skippingRequest.isEmpty()){
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пропуск не найден"));
+            }
+
+            SkippingRequest newSkippingRequest = skippingRequest.get();
+            if (!newSkippingRequest.getStudent().equals(user)){
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не можете редактировать этот пропуск, так как не являетесь его владельцем"));
+            }
+
+            if (newSkippingRequest.getStatus() == SkippingRequestStatus.APPROVED || newSkippingRequest.getStatus() == SkippingRequestStatus.REJECTED){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Нельзя изменить дату у одобренного или отклонённого пропуска"));
+            }
+
+            if (newEndDate != null && newStartDate.isAfter(newEndDate)){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Дата начала не может быть позже даты окончания"));
+            }
+
+            newSkippingRequest.setStartDate(newStartDate);
+            newSkippingRequest.setEndDate(newEndDate);
+            skippingRequestRepository.save(newSkippingRequest);
+
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "message", "Даты пропуска успешно обновлены",
+                            "newStartDate", newStartDate,
+                            "newEndDate", (newEndDate != null ? newEndDate.toString() : "Неограниченный")
+                    ));
+
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
+
 }
