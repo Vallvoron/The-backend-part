@@ -24,8 +24,6 @@ public class Confirmation {
     @Column(nullable = false)
     private String filename;
 
-    @Column(nullable = false)
-    private String fileType;
 
     @Lob
     @Column(nullable = false)

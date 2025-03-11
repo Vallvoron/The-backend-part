@@ -320,7 +320,7 @@ public class SkippingRequestController {
 
 
 
-    @PostMapping(value = "/addDocument", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/addDocument", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
     @Operation(
             summary = "Добавление документов к пропуску",
             responses = {
@@ -332,7 +332,8 @@ public class SkippingRequestController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @Valid @RequestPart("request") ConfirmationRegisterRequest request, @RequestPart("files") List<MultipartFile> files) {
+    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") String request, @RequestPart("files") MultipartFile file){
+
 
         try {
 
@@ -362,26 +363,22 @@ public class SkippingRequestController {
 
             User user = userLogin.get();
 
-            if (!Objects.equals(user.getRole().toString(), "СТУДЕНТ")) {
-                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, пропуска могут создавать только пользователи с ролью СТУДЕНТ"));
-            }
 
-            for (MultipartFile file : files) {
+
+
                 String filename = file.getOriginalFilename();
                 String filePath = uploadDirectory + "/" + UUID.randomUUID() + "_" + filename;
 
                 Path path = Paths.get(filePath);
                 Files.write(path, file.getBytes());
-                Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(request.getRequestId());
+                Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(UUID.fromString(request));
                 SkippingRequest skippingRequest = skippingRequestOpt.get();
 
                 Confirmation confirmation = new Confirmation();
                 confirmation.setFilename(filename);
-                confirmation.setFileType(file.getContentType());
                 confirmation.setFilePath(filePath);
                 confirmation.setSkippingRequest(skippingRequest);
                 confirmationRepository.save(confirmation);
-            }
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("message", "Документ(-ы) успешно прикреплен(-ы)"));
         } catch (Exception error) {
