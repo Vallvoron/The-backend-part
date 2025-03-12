@@ -21,12 +21,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.crypto.SecretKey;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +37,8 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @RestController
 @RequestMapping("/api/skipping-requests")
@@ -432,25 +437,40 @@ public class SkippingRequestController {
             User user = userLogin.get();
 
             Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(UUID.fromString(skippingRequestId));
-            SkippingRequest pass= skippingRequestOpt.get();
-            List<Confirmation> confirmations= confirmationRepository.findBySkippingRequest(pass);
-            List<String> filePaths = new ArrayList<>();
+            SkippingRequest pass = skippingRequestOpt.get();
+            List<Confirmation> confirmations = confirmationRepository.findBySkippingRequest(pass);
+
+
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            ZipOutputStream zipOutputStream = new ZipOutputStream(byteArrayOutputStream);
 
             for (Confirmation confirmation : confirmations) {
                 String filePath = confirmation.getFilePath();
                 java.io.File file = new java.io.File(filePath);
 
                 if (file.exists()) {
-                    filePaths.add(filePath);
+
+                    ZipEntry zipEntry = new ZipEntry(confirmation.getFilename());
+                    zipOutputStream.putNextEntry(zipEntry);
+
+
+                    Files.copy(file.toPath(), zipOutputStream);
+
+                    zipOutputStream.closeEntry();
                 } else {
                     return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Файл не найден"));
                 }
             }
 
 
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(filePaths);
+            zipOutputStream.close();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", "documents.zip"); // Set filename for the ZIP
+            headers.setContentLength(byteArrayOutputStream.size());
+
+            return new ResponseEntity<>(byteArrayOutputStream.toByteArray(), headers, HttpStatus.OK);
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
