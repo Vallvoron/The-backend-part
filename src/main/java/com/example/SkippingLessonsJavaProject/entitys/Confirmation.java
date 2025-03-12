@@ -1,5 +1,6 @@
 package com.example.SkippingLessonsJavaProject.entitys;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -30,6 +31,7 @@ public class Confirmation {
     private String filePath;
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "skipping_request_id", nullable = false)
     private SkippingRequest skippingRequest;
 }

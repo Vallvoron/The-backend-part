@@ -18,6 +18,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -43,7 +46,7 @@ public class SkippingRequestController {
     private final ConfirmationRepository confirmationRepository;
     private final UserRepository userDb;
     private final TokenBlackList tokenBlackList;
-    @Value("${file.upload.directory:/data/files/}")
+    @Value("${file.upload.directory}")
     private String uploadDirectory;
 
     @Autowired
@@ -332,7 +335,7 @@ public class SkippingRequestController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") String request, @RequestPart("files") MultipartFile file){
+    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") String request, @RequestPart("files") List<MultipartFile> files){
 
 
         try {
@@ -363,11 +366,10 @@ public class SkippingRequestController {
 
             User user = userLogin.get();
 
-
-
-
+            for(MultipartFile file : files) {
                 String filename = file.getOriginalFilename();
                 String filePath = uploadDirectory + "/" + UUID.randomUUID() + "_" + filename;
+                System.out.println("Сохраняем файл по пути: " + filePath);
 
                 Path path = Paths.get(filePath);
                 Files.write(path, file.getBytes());
@@ -379,6 +381,7 @@ public class SkippingRequestController {
                 confirmation.setFilePath(filePath);
                 confirmation.setSkippingRequest(skippingRequest);
                 confirmationRepository.save(confirmation);
+            }
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("message", "Документ(-ы) успешно прикреплен(-ы)"));
         } catch (Exception error) {
@@ -398,7 +401,7 @@ public class SkippingRequestController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> getConfirmationList(HttpServletRequest request,  @RequestParam UUID skippingRequestId) {
+    public ResponseEntity<?> getConfirmationList(HttpServletRequest request,  @RequestParam String skippingRequestId) {
 
         try {
 
@@ -428,24 +431,26 @@ public class SkippingRequestController {
 
             User user = userLogin.get();
 
-            Optional<SkippingRequest> skippingRequest= skippingRequestRepository.findById(skippingRequestId);
-            SkippingRequest pass= skippingRequest.get();
+            Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(UUID.fromString(skippingRequestId));
+            SkippingRequest pass= skippingRequestOpt.get();
             List<Confirmation> confirmations= confirmationRepository.findBySkippingRequest(pass);
-            List<File> files = new ArrayList<>();
+            List<String> filePaths = new ArrayList<>();
 
             for (Confirmation confirmation : confirmations) {
                 String filePath = confirmation.getFilePath();
-                File file = new File(filePath);
+                java.io.File file = new java.io.File(filePath);
+
                 if (file.exists()) {
-                    files.add(file);
+                    filePaths.add(filePath);
                 } else {
                     return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Файл не найден"));
                 }
             }
 
+
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(files);
+                    .body(filePaths);
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
         }
