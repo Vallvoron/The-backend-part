@@ -18,9 +18,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,7 +27,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.crypto.SecretKey;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -353,17 +349,17 @@ public class SkippingRequestController {
 
     @PostMapping(value = "/addDocument", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
     @Operation(
-            summary = "Добавление документов к пропуску",
+            summary = "Добавление документов к пропуску (создается новый документ)",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = SkippingRequestRegisterRequest.class))),
+                    @ApiResponse(responseCode = "200", description = "Success",content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Документ(-ы) успешно прикреплен(-ы)\"\n}"))),
                     @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
                     @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
                     @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") String request, @RequestPart("files") List<MultipartFile> files){
+    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") UUID request, @RequestPart("files") List<MultipartFile> files){
 
 
         try {
@@ -393,6 +389,15 @@ public class SkippingRequestController {
             }
 
             User user = userLogin.get();
+            Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(request);
+            if (skippingRequestOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Пропуск не найден"));
+            }
+            SkippingRequest skippingRequest = skippingRequestOpt.get();
+
+            if (user != skippingRequest.getStudent()) {
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, вы не являетесь создателем пропуска"));
+            }
 
             for(MultipartFile file : files) {
                 String filename = file.getOriginalFilename();
@@ -401,8 +406,6 @@ public class SkippingRequestController {
 
                 Path path = Paths.get(filePath);
                 Files.write(path, file.getBytes());
-                Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(UUID.fromString(request));
-                SkippingRequest skippingRequest = skippingRequestOpt.get();
 
                 Confirmation confirmation = new Confirmation();
                 confirmation.setFilename(filename);
@@ -417,19 +420,102 @@ public class SkippingRequestController {
         }
     }
 
-    @GetMapping("/getDocument")
+    @PostMapping("/attachDocumentToRequest")
+    @Operation(
+            summary = "Добавление документов к пропуску (существующие в бд документы добавляются к еще одному пропуску)",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success",content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Документ(-ы) успешно прикреплен(-ы)\"\n}"))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> attachDocumentToRequest(
+            HttpServletRequest authRequest,
+            @RequestParam List<UUID> confirmationsId,
+            @RequestParam UUID skippingRequestId) {
+
+        try {
+
+            String authHeader = authRequest.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
+            }
+
+            User user = userLogin.get();
+            Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(skippingRequestId);
+            if (skippingRequestOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Пропуск не найден"));
+            }
+
+            SkippingRequest skippingRequest = skippingRequestOpt.get();
+
+            if (user != skippingRequest.getStudent()) {
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, вы не являетесь создателем пропуска"));
+            }
+
+            for ( UUID confirmationId : confirmationsId)
+            {
+                Optional<Confirmation> confirmationOptional = confirmationRepository.findById(confirmationId);
+
+                if (confirmationOptional.isEmpty()) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Документ не найден"));
+                }
+                Confirmation confirmation = confirmationOptional.get();
+
+                confirmation.setSkippingRequest(skippingRequest);
+                confirmationRepository.save(confirmation);
+            }
+
+            return ResponseEntity.ok(Map.of("message", "Документ(-ы) успешно прикреплен(-ы) к пропуску"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Ошибка: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/getDocument", produces =  {MediaType.APPLICATION_OCTET_STREAM_VALUE, MediaType.APPLICATION_JSON_VALUE})
     @Operation(
             summary = "Получение листа документов",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = SkippingRequestRegisterRequest.class))),
+                    @ApiResponse(responseCode = "200", description = "Success",content = @Content(
+                            mediaType = "application/octet-stream",
+                            schema = @Schema(type = "string", format = "binary"),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "ZIP file",
+                                            value = "Binary data of the ZIP file (cannot be displayed directly)"
+                                    )
+                            }
+                    )),
                     @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
                     @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
                     @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> getConfirmationList(HttpServletRequest request,  @RequestParam String skippingRequestId) {
+    public ResponseEntity<?> getConfirmationList(HttpServletRequest request,  @RequestParam UUID skippingRequestId) {
 
         try {
 
@@ -459,7 +545,10 @@ public class SkippingRequestController {
 
             User user = userLogin.get();
 
-            Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(UUID.fromString(skippingRequestId));
+            Optional<SkippingRequest> skippingRequestOpt = skippingRequestRepository.findById(skippingRequestId);
+            if (skippingRequestOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Пропуск не найден"));
+            }
             SkippingRequest pass = skippingRequestOpt.get();
             List<Confirmation> confirmations = confirmationRepository.findBySkippingRequest(pass);
 
