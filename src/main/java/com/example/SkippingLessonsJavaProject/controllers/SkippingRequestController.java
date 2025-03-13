@@ -158,7 +158,10 @@ public class SkippingRequestController {
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
             @RequestParam(required = false) SortSettings sortSetting,
-            @RequestParam(required = false) Integer lessonNumber){
+            @RequestParam(required = false) Integer lessonNumber,
+            @RequestParam(required = false, defaultValue = "false") Boolean isAppruved,
+            @RequestParam(required = false, defaultValue = "1") int page,
+            @RequestParam(required = false, defaultValue = "10") int size){
         try {
 
             String authHeader = request.getHeader("Authorization");
@@ -247,7 +250,27 @@ public class SkippingRequestController {
                 }
             }
 
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("list", finalList));
+            if (isAppruved) {
+                finalList = finalList.stream()
+                        .filter(t -> t.getStatus() == SkippingRequestStatus.APPROVED)
+                        .collect(Collectors.toList());
+            }
+
+            int totalCount = finalList.size();
+            int fromIndex = (page - 1)*size;
+            int toIndex = Math.min(fromIndex + size, finalList.size());
+
+            if (fromIndex >= finalList.size()){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли за пределы списка"));
+            }
+
+            List<SkippingRequest> paginatedList = finalList.subList(fromIndex, toIndex);
+
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
+                    "totalCount", totalCount,
+                    "currentPage", page,
+                    "pageSize", size,
+                    "list", paginatedList));
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));

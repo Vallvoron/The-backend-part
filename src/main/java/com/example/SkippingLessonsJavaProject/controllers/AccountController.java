@@ -178,7 +178,7 @@ public class AccountController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> registerList (HttpServletRequest request){
+    public ResponseEntity<?> registerList (HttpServletRequest request, @RequestParam(required = false, defaultValue = "1") int page, @RequestParam(required = false, defaultValue = "10") int size){
         try {
 
             String authHeader = request.getHeader("Authorization");
@@ -213,7 +213,21 @@ public class AccountController {
 
             List<UsersForRegister> users = usersForRegisterDb.findAll();
 
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("users", users));
+            int totalCount = users.size();
+            int fromIndex = (page - 1)*size;
+            int toIndex = Math.min(fromIndex + size, users.size());
+
+            if (fromIndex >= users.size()){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли за пределы списка"));
+            }
+
+            List<UsersForRegister> finalList = users.subList(fromIndex, toIndex);
+
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
+                    "totalCount", totalCount,
+                    "currentPage", page,
+                    "pageSize", size,
+                    "list", finalList));
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));

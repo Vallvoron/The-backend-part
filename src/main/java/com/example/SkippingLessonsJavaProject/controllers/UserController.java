@@ -44,7 +44,7 @@ public class UserController {
 
     @GetMapping("/list")
     @Operation(
-            summary = "Запрос на выдачу списка пользователей",
+            summary = "Список пользователей",
             description = "Доступно только для админов",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
@@ -55,7 +55,7 @@ public class UserController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> list (HttpServletRequest request){
+    public ResponseEntity<?> list (HttpServletRequest request, @RequestParam(required = false, defaultValue = "1") int page, @RequestParam(required = false, defaultValue = "10") int size){
         try {
             String authHeader = request.getHeader("Authorization");
 
@@ -90,10 +90,23 @@ public class UserController {
 
             List<User> userList = userDb.findAll();
 
-            Map<String, List<User>> response = new HashMap<>();
-            response.put("users array", userList);
 
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(response);
+            int totalCount = userList.size();
+            int fromIndex = (page - 1)*size;
+            int toIndex = Math.min(fromIndex + size, userList.size());
+
+            if (fromIndex >= userList.size()){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли за пределы списка"));
+            }
+
+            List<User> finalList = userList.subList(fromIndex, toIndex);
+
+
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
+                    "totalCount", totalCount,
+                    "currentPage", page,
+                    "pageSize", size,
+                    "list", finalList));
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
@@ -102,7 +115,7 @@ public class UserController {
 
     @GetMapping("/role")
     @Operation(
-            summary = "Запрос на получение роли пользователя",
+            summary = "Получение роли пользователя",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"role\": \"Ваша роль\"\n}"))),
                     @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
