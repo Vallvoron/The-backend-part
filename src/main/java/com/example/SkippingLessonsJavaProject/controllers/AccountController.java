@@ -316,6 +316,7 @@ public class AccountController {
 
             User user = userLogin.get();
             UserProfileResponse response = new UserProfileResponse(
+                    user.getId(),
                     user.getName(),
                     user.getLogin(),
                     user.getPhone(),
