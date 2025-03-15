@@ -92,6 +92,7 @@ public class UserController {
 
 
             int totalCount = userList.size();
+            int totalPages = (int) Math.ceil((double) totalCount / size);
             int fromIndex = (page - 1)*size;
             int toIndex = Math.min(fromIndex + size, userList.size());
 
@@ -104,6 +105,7 @@ public class UserController {
 
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
                     "totalCount", totalCount,
+                    "totalPagesCount", totalPages,
                     "currentPage", page,
                     "pageSize", size,
                     "list", finalList));

@@ -214,6 +214,7 @@ public class AccountController {
             List<UsersForRegister> users = usersForRegisterDb.findAll();
 
             int totalCount = users.size();
+            int totalPages = (int) Math.ceil((double) totalCount / size);
             int fromIndex = (page - 1)*size;
             int toIndex = Math.min(fromIndex + size, users.size());
 
@@ -225,6 +226,7 @@ public class AccountController {
 
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
                     "totalCount", totalCount,
+                    "totalPagesCount", totalPages,
                     "currentPage", page,
                     "pageSize", size,
                     "list", finalList));

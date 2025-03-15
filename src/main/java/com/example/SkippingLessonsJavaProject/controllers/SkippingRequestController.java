@@ -16,8 +16,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -253,6 +258,7 @@ public class SkippingRequestController {
             }
 
             int totalCount = finalList.size();
+            int totalPages = (int) Math.ceil((double) totalCount / size);
             int fromIndex = (page - 1)*size;
             int toIndex = Math.min(fromIndex + size, finalList.size());
 
@@ -264,6 +270,7 @@ public class SkippingRequestController {
 
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of(
                     "totalCount", totalCount,
+                    "totalPagesCount", totalPages,
                     "currentPage", page,
                     "pageSize", size,
                     "list", paginatedList));
@@ -664,6 +671,93 @@ public class SkippingRequestController {
                             "newStartDate", newStartDate,
                             "newEndDate", (newEndDate != null ? newEndDate.toString() : "Неограниченный")
                     ));
+
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
+
+
+    @GetMapping("/export")
+    @Operation(
+            summary = "Экспорт пропусков",
+            description = "Доступно только для админа и деканата",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content()),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> export (HttpServletRequest request1){
+        try(Workbook workbook = new XSSFWorkbook()){
+            String authHeader = request1.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
+            }
+
+            User user = userLogin.get();
+
+            if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
+                if (!Objects.equals(user.getRole().toString(), "ДЕКАНАТ")) {
+                    return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН или ДЕКАНАТ"));
+                }
+            }
+
+            Sheet sheet = workbook.createSheet("skippingRequest");
+
+            Row headerRow = sheet.createRow(0);
+            String[] columns = {"ID", "ID Студента", "Дата начала", "Дата конца", "Причина", "Статус", "Порядковый номер урока", "ID Подтверждающего"};
+
+            for (int i = 0; i < columns.length; i++){
+                headerRow.createCell(i).setCellValue(columns[i]);
+            }
+
+            List<SkippingRequest> skippingRequests = skippingRequestRepository.findAll();
+
+            int index = 1;
+            for (SkippingRequest request : skippingRequests){
+                Row row = sheet.createRow(index++);
+                row.createCell(0).setCellValue(request.getId().toString());
+                row.createCell(1).setCellValue(request.getStudent().getId().toString());
+                row.createCell(2).setCellValue(request.getStartDate().toString());
+                row.createCell(3).setCellValue(request.getEndDate().toString());
+                row.createCell(4).setCellValue(request.getReason() != null ? request.getReason() : "");
+                row.createCell(5).setCellValue(request.getStatus().name());
+                row.createCell(6).setCellValue(request.getLessons() != null ? request.getLessons().toString() : "");
+                row.createCell(7).setCellValue(request.getApprover() != null ? request.getApprover().getId().toString() : "");
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+
+            ByteArrayResource resource = new ByteArrayResource(out.toByteArray());
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=skipping_requests.xlsx")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource);
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
