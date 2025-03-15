@@ -9,4 +9,5 @@ import java.util.UUID;
 
 public interface ConfirmationRepository  extends JpaRepository<Confirmation, UUID> {
     List<Confirmation> findBySkippingRequest(SkippingRequest skippingRequest);
+    boolean existsByFilenameAndSkippingRequest(String filename, SkippingRequest skippingRequest);
 }

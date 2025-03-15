@@ -401,6 +401,11 @@ public class SkippingRequestController {
 
             for(MultipartFile file : files) {
                 String filename = file.getOriginalFilename();
+
+                if (confirmationRepository.existsByFilenameAndSkippingRequest(filename, skippingRequest)) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Файл с таким именем уже существует для этого пропуска"));
+                }
+
                 String filePath = uploadDirectory + "/" + UUID.randomUUID() + "_" + filename;
                 System.out.println("Сохраняем файл по пути: " + filePath);
 

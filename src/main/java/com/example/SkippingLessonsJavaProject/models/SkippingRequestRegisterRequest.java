@@ -22,8 +22,6 @@ public class SkippingRequestRegisterRequest {
     private LocalDate endDate;
 
     @Schema(description = "Причина пропуска", example = "Потому что")
-    @Size(min = 7, message = "Причина должна содержать больше 7 символов")
-    @NotBlank(message = "Причина не должна быть пустой")
     private String reason;
 
     @Schema(description = "Пары, которые были пропущены (если был пропущен временной промежуток, то оставьте это поле пустым)", example = "[1, 2, 3]")
