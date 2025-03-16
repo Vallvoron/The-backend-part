@@ -1,0 +1,10 @@
+version: 1
+services:
+  - type: web
+    name: the-backend-part
+    env: java
+    buildCommand: mvn clean install
+    startCommand: java $JAVA_OPTS -Dserver.port=$PORT -jar target/*.jar
+    envVars:
+      - key: JAVA_VERSION
+        value: "21"
