@@ -155,7 +155,7 @@ public class SkippingRequestController {
     )
     public ResponseEntity<?> skippingRequestList (
             HttpServletRequest request,
-            @RequestParam(required = false) UUID studentId,
+            @RequestParam(required = false) String studentName,
             @RequestParam(required = false) LocalDate startDate,
             @RequestParam(required = false) LocalDate endDate,
             @RequestParam(required = false) SortSettings sortSetting,
@@ -218,9 +218,10 @@ public class SkippingRequestController {
                     return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав"));
             }
 
-            if (studentId != null){
+            if (studentName != null && !studentName.isBlank()){
                 finalList = finalList.stream()
-                        .filter(stud -> stud.getStudent().getId().equals(studentId))
+                        .filter(stud -> stud.getStudent().getName() != null &&
+                                stud.getStudent().getName().toLowerCase().contains(studentName.toLowerCase()))
                         .collect(Collectors.toList());
             }
 
@@ -653,8 +654,8 @@ public class SkippingRequestController {
                 return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не можете редактировать этот пропуск, так как не являетесь его владельцем"));
             }
 
-            if (newSkippingRequest.getStatus() == SkippingRequestStatus.APPROVED || newSkippingRequest.getStatus() == SkippingRequestStatus.REJECTED){
-                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Нельзя изменить дату у одобренного или отклонённого пропуска"));
+            if (newSkippingRequest.getStatus() == SkippingRequestStatus.REJECTED){
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Нельзя изменить дату у отклонённого пропуска"));
             }
 
             if (newEndDate != null && newStartDate.isAfter(newEndDate)){
