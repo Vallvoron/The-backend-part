@@ -355,7 +355,7 @@ public class SkippingRequestController {
 
 
 
-    @PostMapping(value = "/addDocument", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
+    @PostMapping(value = "/addDocument", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE}, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
             summary = "Добавление документов к пропуску (создается новый документ)",
             responses = {
@@ -367,7 +367,7 @@ public class SkippingRequestController {
                     @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
             }
     )
-    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestPart("request") UUID request, @RequestPart("files") List<MultipartFile> files){
+    public ResponseEntity<?> createConfirmation(HttpServletRequest authRequest, @RequestParam("request") UUID request, @RequestParam("files") List<MultipartFile> files){
 
 
         try {
