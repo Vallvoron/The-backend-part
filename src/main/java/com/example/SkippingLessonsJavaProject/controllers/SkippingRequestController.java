@@ -52,7 +52,7 @@ public class SkippingRequestController {
     private final ConfirmationRepository confirmationRepository;
     private final UserRepository userDb;
     private final TokenBlackList tokenBlackList;
-    @Value("${file.upload.directory}")
+    @Value('${file.upload.directory}')
     private String uploadDirectory;
 
     @Autowired
