@@ -164,6 +164,73 @@ public class AccountController {
         }
     }
 
+    @PostMapping("/reject")
+    @Operation(
+            summary = "Отклонение заявок регистрации пользователей",
+            description = "Доступно только для админов",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Пользователь добавлен в систему\"\n}"))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    @Transactional
+    public ResponseEntity<?> rejectUser(HttpServletRequest request, @RequestParam String login) {
+        try {
+
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не найден"));
+            }
+
+            User user = userLogin.get();
+
+            if (!Objects.equals(user.getRole().toString(), "АДМИН")) {
+                return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Запрос отклонен, у вас недостаточно прав, воспользоваться может только АДМИН"));
+            }
+
+            Optional<UsersForRegister> optionalUser = usersForRegisterDb.findByLogin(login);
+            if (optionalUser.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Заявка на регистрацию не найдена"));
+            }
+
+            UsersForRegister usersForRegister = optionalUser.get();
+
+            if (userDb.findByLogin(login).isPresent()) {
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь уже зарегистрирован"));
+            }
+
+            usersForRegisterDb.delete(usersForRegister);
+
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь " + login + " добавлен в систему"));
+
+        } catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
+
 
     @GetMapping("/registerList")
     @Operation(
