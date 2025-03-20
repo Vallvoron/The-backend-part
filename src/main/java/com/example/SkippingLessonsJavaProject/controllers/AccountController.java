@@ -164,12 +164,12 @@ public class AccountController {
         }
     }
 
-    @PostMapping("/reject")
+    @DeleteMapping("/reject")
     @Operation(
             summary = "Отклонение заявок регистрации пользователей",
             description = "Доступно только для админов",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Пользователь добавлен в систему\"\n}"))),
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Пользователь удален из списка на регистрацию\"\n}"))),
                     @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
                     @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
                     @ApiResponse(responseCode = "403", description = "Forbidden", content = @Content()),
@@ -224,7 +224,7 @@ public class AccountController {
 
             usersForRegisterDb.delete(usersForRegister);
 
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь " + login + " добавлен в систему"));
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь " + login + " удален из списка на регистрацию"));
 
         } catch (Exception error) {
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
