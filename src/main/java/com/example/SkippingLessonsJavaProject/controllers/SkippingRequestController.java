@@ -139,6 +139,54 @@ public class SkippingRequestController {
 
     }
 
+    @GetMapping("/skippingRequest")
+    @Operation(
+            summary = "Информация о пропуске",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = SkippingRequest.class))),
+                    @ApiResponse(responseCode = "400", description = "Bad Request", content = @Content()),
+                    @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content()),
+                    @ApiResponse(responseCode = "404", description = "Not Found", content = @Content()),
+                    @ApiResponse(responseCode = "500", description = "InternalServerError", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = "{\n  \"message\": \"Ошибка: Описание ошибки\"\n}")))
+            }
+    )
+    public ResponseEntity<?> skippingRequest (HttpServletRequest request, @RequestParam UUID skippingRequestId){
+        try {
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(400).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы не зарегистрированы"));
+            }
+            String token = authHeader.substring(7);
+
+            if (tokenBlackList.isTokenBlackList(token)) {
+                return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Вы вышли из системы, повторите вход"));
+            }
+
+            Claims claims = Jwts.parser()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            String ourlogin = claims.getSubject();
+            Optional<User> userLogin = userDb.findByLogin(ourlogin);
+
+            if (userLogin.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пропуск не найден"));
+            }
+
+            Optional<SkippingRequest> skippingRequestOptional = skippingRequestRepository.findById(skippingRequestId);
+            if (skippingRequestOptional.isEmpty()) {
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Пользователь не наден"));
+            }
+            SkippingRequest skippingRequest= skippingRequestOptional.get();
+            return  ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(skippingRequest);
+        }catch (Exception error) {
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(Map.of("message", "Ошибка: " + error.getMessage()));
+        }
+    }
 
     @GetMapping("/skippingRequestList")
     @Operation(
